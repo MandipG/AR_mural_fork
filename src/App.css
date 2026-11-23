@@ -8,43 +8,6 @@ button {
   font: inherit;
 }
 
-.start-screen {
-  display: flex;
-  min-height: 100dvh;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.start-content {
-  width: min(100%, 420px);
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  color: #5d6f62;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.start-content h1 {
-  margin: 0;
-  color: #111;
-  font-size: clamp(2rem, 8vw, 3.2rem);
-  line-height: 1.05;
-  letter-spacing: 0;
-}
-
-.start-copy {
-  margin: 16px 0 28px;
-  color: #4d544f;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.primary-action,
 .stop-button {
   min-height: 52px;
   border: 0;
@@ -53,14 +16,6 @@ button {
   cursor: pointer;
 }
 
-.primary-action {
-  width: 100%;
-  padding: 0 20px;
-  color: #fff;
-  background: #151515;
-}
-
-.primary-action:active,
 .stop-button:active {
   transform: translateY(1px);
 }
@@ -166,15 +121,6 @@ body .mindar-ui-scanning .scanning .inner {
 }
 
 @media (min-width: 700px) {
-  .start-screen {
-    padding: 48px;
-  }
-
-  .primary-action {
-    width: auto;
-    min-width: 180px;
-  }
-
   .stop-button {
     min-width: 104px;
   }

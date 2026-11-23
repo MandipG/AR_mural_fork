@@ -355,7 +355,8 @@ const MindARViewer = () => {
         embedded
         color-space="sRGB"
         renderer="colorManagement: true; physicallyCorrectLights: true"
-        vr-mode-ui="enabled: false"
+        xr-mode-ui="enabled: false"
+        keyboard-shortcuts="enterVR: false"
         device-orientation-permission-ui="enabled: false"
         mindar-image={`
           imageTargetSrc: ${muralData.mindFile};
