@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import "aframe";
 import "mind-ar/dist/mindar-image-aframe.prod.js";
 import Hls from "hls.js";
+import "./video-color.js";
 
 import muralData from "./Constants/data.js";
 import rewind from "./assets/icons/rewind.svg";
@@ -23,6 +24,7 @@ const MindARViewer = () => {
   const [focusedTarget, setFocusedTarget] = useState(null);
   const [trackedTargets, setTrackedTargets] = useState(() => new Set());
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
@@ -30,6 +32,20 @@ const MindARViewer = () => {
     focusedTarget !== null && trackedTargets.has(focusedTarget);
 
   const isDetached = focusedTarget !== null && !isFocusedTracked;
+
+  const playVideo = useCallback(async (video) => {
+    setPlaybackError("");
+    video.muted = false;
+    try {
+      await video.play();
+    } catch (error) {
+      setPlaybackError(
+        error.name === "NotAllowedError"
+          ? "Tap Play to start the video with sound."
+          : "The video could not play. Please reload and try again.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const players = [];
@@ -126,7 +142,7 @@ const MindARViewer = () => {
 
         targetEl?.addEventListener("targetFound", async () => {
           setTrackedTargets((prev) => new Set(prev).add(idx));
-          videoEntity?.setAttribute("visible", "true");
+          videoEntity?.setAttribute("visible", video?.readyState >= 2);
 
           if (focusedTargetRef.current !== idx) {
             transformsRef.current[idx] = { zoom: 1, pan: { x: 0, y: 0 } };
@@ -144,13 +160,12 @@ const MindARViewer = () => {
             resetEntityTransform(idx, saved.zoom, saved.pan);
           }
 
+          focusedTargetRef.current = idx;
+          setPlaybackError("");
+
           const el = videoElRefs.current[idx];
           if (el && el.paused) {
-            try {
-              await el.play();
-            } catch (e) {
-              console.error(e);
-            }
+            await playVideo(el);
           }
 
           if (el) {
@@ -185,15 +200,15 @@ const MindARViewer = () => {
         .querySelectorAll(".mindar-ui-overlay")
         .forEach((overlay) => overlay.remove());
     };
-  }, []);
+  }, [playVideo]);
 
   const togglePlay = useCallback(() => {
     if (focusedTarget === null) return;
     const video = videoElRefs.current[focusedTarget];
     if (!video) return;
-    if (video.paused) video.play();
+    if (video.paused) playVideo(video);
     else video.pause();
-  }, [focusedTarget]);
+  }, [focusedTarget, playVideo]);
 
   const skip = useCallback(
     async (seconds) => {
@@ -321,18 +336,27 @@ const MindARViewer = () => {
     focusedTargetRef.current = null;
     setFocusedTarget(null);
     setIsPlaying(false);
+    setPlaybackError("");
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, [focusedTarget]);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        isolation: "isolate",
+      }}
+    >
       <a-scene
         ref={sceneRef}
         embedded
         color-space="sRGB"
         renderer="colorManagement: true; physicallyCorrectLights: true"
-        vr-mode-ui="enabled: false"
+        xr-mode-ui="enabled: false"
+        keyboard-shortcuts="enterVR: false"
         device-orientation-permission-ui="enabled: false"
         mindar-image={`
           imageTargetSrc: ${muralData.mindFile};
@@ -357,6 +381,8 @@ const MindARViewer = () => {
               <a-video
                 id={`video-entity-${target.targetIndex}`}
                 src={`#video-${target.targetIndex}`}
+                material="shader: flat; color: #ffffff; toneMapped: false; fog: false; transparent: false"
+                video-color=""
                 width={arWidth}
                 height={arHeight}
                 position="0 0 0.02"
@@ -385,11 +411,23 @@ const MindARViewer = () => {
               videoElRefs.current[idx] = el;
             }}
             src={target.video.endsWith(".m3u8") ? undefined : target.video}
-            muted={target.video.endsWith(".m3u8")}
+            muted={false}
             preload="auto"
             playsInline
             webkit-playsinline="true"
             crossOrigin="anonymous"
+            onLoadedData={() => {
+              if (trackedTargetsRef.current.has(idx)) {
+                videoEntityRefs.current[idx]?.setAttribute("visible", "true");
+              }
+            }}
+            onError={() => {
+              if (focusedTargetRef.current === idx) {
+                setPlaybackError(
+                  "The video could not load. Please reload and try again.",
+                );
+              }
+            }}
             onClick={isThisDetachedOverlay ? togglePlay : undefined}
             className={isThisDetachedOverlay ? "detached-video" : undefined}
             style={
@@ -430,83 +468,94 @@ const MindARViewer = () => {
       )}
 
       {focusedTarget !== null && (
-        <div
-          style={{
-            position: "fixed",
-            left: "50%",
-            bottom: 24,
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 14px",
-            borderRadius: 999,
-            background: "rgba(0,0,0,0.65)",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <button
-            onClick={() => skip(-10)}
-            style={btnStyle}
-            aria-label="Rewind 10s"
-          >
-            <img
-              src={rewind}
-              alt="Rewind 10s"
-              style={{ width: 16, height: 16 }}
-            />
-          </button>
-          <button onClick={togglePlay} style={btnStyle} aria-label="Play/Pause">
-            {isPlaying ? (
-              <img src={pause} style={{ width: 16, height: 16 }} />
-            ) : (
-              <img src={play} style={{ width: 16, height: 16 }} />
-            )}
-          </button>
-          <button
-            onClick={() => skip(10)}
-            style={btnStyle}
-            aria-label="Forward 10s"
-          >
-            <img
-              src={rewind}
-              alt="Forward 10s"
-              style={{ width: 16, height: 16, transform: "rotate(180deg)" }}
-            />
-          </button>
-          <button
-            onClick={zoomOut}
+        <>
+          {playbackError && (
+            <p className="video-playback-error" role="alert">
+              {playbackError}
+            </p>
+          )}
+          <div
             style={{
-              ...btnStyle,
-              opacity: isFocusedTracked ? 1 : 0.4,
-              cursor: isFocusedTracked ? "pointer" : "not-allowed",
+              position: "fixed",
+              left: "50%",
+              bottom: 24,
+              transform: "translateX(-50%)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              borderRadius: 999,
+              background: "rgba(0,0,0,0.65)",
+              backdropFilter: "blur(4px)",
             }}
-            disabled={!isFocusedTracked}
-            aria-label="Zoom out"
           >
-            −
-          </button>
-          <button
-            onClick={zoomIn}
-            style={{
-              ...btnStyle,
-              opacity: isFocusedTracked ? 1 : 0.4,
-              cursor: isFocusedTracked ? "pointer" : "not-allowed",
-            }}
-            disabled={!isFocusedTracked}
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          <button
-            onClick={handleClose}
-            style={{ ...btnStyle, background: "rgba(255,80,80,0.85)" }}
-            aria-label="Close"
-          >
-            <img src={cancel} alt="Close" style={{ width: 16, height: 16 }} />
-          </button>
-        </div>
+            <button
+              onClick={() => skip(-10)}
+              style={btnStyle}
+              aria-label="Rewind 10s"
+            >
+              <img
+                src={rewind}
+                alt="Rewind 10s"
+                style={{ width: 16, height: 16 }}
+              />
+            </button>
+            <button
+              onClick={togglePlay}
+              style={btnStyle}
+              aria-label="Play/Pause"
+            >
+              {isPlaying ? (
+                <img src={pause} style={{ width: 16, height: 16 }} />
+              ) : (
+                <img src={play} style={{ width: 16, height: 16 }} />
+              )}
+            </button>
+            <button
+              onClick={() => skip(10)}
+              style={btnStyle}
+              aria-label="Forward 10s"
+            >
+              <img
+                src={rewind}
+                alt="Forward 10s"
+                style={{ width: 16, height: 16, transform: "rotate(180deg)" }}
+              />
+            </button>
+            <button
+              onClick={zoomOut}
+              style={{
+                ...btnStyle,
+                opacity: isFocusedTracked ? 1 : 0.4,
+                cursor: isFocusedTracked ? "pointer" : "not-allowed",
+              }}
+              disabled={!isFocusedTracked}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              onClick={zoomIn}
+              style={{
+                ...btnStyle,
+                opacity: isFocusedTracked ? 1 : 0.4,
+                cursor: isFocusedTracked ? "pointer" : "not-allowed",
+              }}
+              disabled={!isFocusedTracked}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              onClick={handleClose}
+              style={{ ...btnStyle, background: "rgba(255,80,80,0.85)" }}
+              aria-label="Close"
+            >
+              <img src={cancel} alt="Close" style={{ width: 16, height: 16 }} />
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
